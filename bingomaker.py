@@ -42,114 +42,108 @@ def get_href(url):
     #returns 28th url which links to the (hopefully) correct lyrics, if it's to page 2, then give 29
     i = 28
     while  i < 40:
-	    if tag[i][:3]!='?q=':
-	        return tag[i]
-	    i+=1
+        if tag[i][:3]!='?q=':
+            return tag[i]
+        i+=1
     return tag[28] # gets tossed to not found & skipped cuz if it can't find a valid link after 40 give up...
 
 
 def main(cardnum):
 
-	with open("playlist.txt", "r") as f:
-		data = f.readlines()
+    with open("playlist.txt", "r") as f:
+        data = f.readlines()
 
-	searches= []
-	forbidWords = ["me", "no", "de", "en", "te", "el", "la", "yo", "lo", "si", "un", "the", "a", \
-	"in", "on", "if", "am", "you", "it", "is", "es", "una", "uno", "o", "las", "al", "&amp;"]
+    searches= []
+    forbidden_words = ["&amp;"] #Put swear words here if you don't want those in lyrics bingo
 
-	for lines in data:
-		line = lines.split("-")[0].split(";")[0]
-		line += lines.split("-")[1].replace("\n","")
-		line = re.sub('\ \(.+?\)', '', line).replace(" ", "+").replace("&","")
-		searches.append(line)
+    for lines in data:
+        line = lines.split("-")[0].split(";")[0]
+        line += lines.split("-")[1].replace("\n","")
+        line = re.sub('\ \(.+?\)', '', line).replace(" ", "+").replace("&","")
+        line = re.sub('\[.+?\]', '', line)
+        searches.append(line)
 
 
 
-	d = {}
+    d = {}
+    scrape_errors = []
+    for search in searches:
+        url= "https://search.azlyrics.com/search.php?q="+search
+        print(url)
+        url = get_href(url)
+        time.sleep(3) # Sleep to not overwhelm the servers
+        headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 6.0; WOW64; rv:24.0) Gecko/20100101 Firefox/24.0' } #what browser we're pretending to be
+        try:
+            response = requests.get(url, headers=headers)
+            content = response.content
+            soup = BeautifulSoup(content, "lxml")
+            tag = soup.find("div", {"class": "col-xs-12 col-lg-8 text-center"})
+            tag =str(tag)
+            tag = tag.split('</div>')[6]
+            tag = tag.replace("feat","")
+            tag = re.sub('\[.+?\]', '', tag)
+            tag = re.sub('\,', '', tag)
+            tag = re.sub('\.', '', tag)
+            tag = re.sub('\(', '', tag)
+            tag = re.sub('\)', '', tag)
+            tag = re.sub('\?', '', tag)
+            tag = re.sub('\"', '', tag)
+            lyrics = re.sub('<[^<]+?>', '', tag)
+            lyrics = lyrics.split()
+            thissong = []
+            for word in lyrics:
+                word = word.lower()
+                if len(word)>3 and word not in forbidden_words:
+                    if word not in thissong:
+                        if word in d:
+                            d[word][0] += 1
+                            d[word][1] += 1
+                        else:
+                            d[word] = [1,1]
+                        thissong.append(word)
+                    else:
+                        d[word][1]+=1
+        except requests.exceptions.MissingSchema:
+            print("NOT FOUND:", search)
+            scrape_errors.append("NOT FOUND: "+search+"\n")
 
-	for search in searches:
-		url= "https://search.azlyrics.com/search.php?q="+search
-		print(url)
-		url = get_href(url)
-		time.sleep(3) # Sleep to not overwhelm the servers
-		headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 6.0; WOW64; rv:24.0) Gecko/20100101 Firefox/24.0' }
-		try:
-			response = requests.get(url, headers=headers)
-			content = response.content
-			soup = BeautifulSoup(content, "lxml")
-			tag = soup.find("div", {"class": "col-xs-12 col-lg-8 text-center"})
-			tag =str(tag)
-			tag = tag.split('</div>')[6]
-			tag = tag.replace("feat","")
-			tag = re.sub('\[.+?\]', '', tag)
-			tag = re.sub('\,', '', tag)
-			tag = re.sub('\.', '', tag)
-			tag = re.sub('\(', '', tag)
-			tag = re.sub('\)', '', tag)
-			tag = re.sub('\?', '', tag)
-			tag = re.sub('\"', '', tag)
-			lyrics = re.sub('<[^<]+?>', '', tag)
-			lyrics = lyrics.split()
-			thissong = []
-			for word in lyrics:
-				word = word.lower()
-				if word not in forbidWords and len(word)>2:
-					if word not in thissong:
-						if word in d:
-							d[word][0] += 1
-							d[word][1] += 1
-						else:
-							d[word] = [1,1]
-						thissong.append(word)
-					else:
-						d[word][1]+=1
-		except:
-			print("NOT FOUND: "+url)
+    #Write words to an empty out.txt for analysis
+    with open('out.txt', 'w+') as fh:
+        for w in sorted(d, key=d.get, reverse=True):
+            fh.write("{}, {}, {}\n".format(w,str(d[w][0]),str(d[w][1])))
+        for err in scrape_errors:
+            fh.write(err)
+    
+    
+    wordlist = [line.split(',')[0] for line in open("out.txt")][0:250] # Top 250 words
 
-	#Write words to an empty out.txt for analysis
-	open('out.txt', 'w').close()
-	for w in sorted(d, key=d.get, reverse=True):
-		fh = open("out.txt", "a")
-		fh.write("{}, {}, {}\n".format(w,str(d[w][0]),str(d[w][1])))
-		fh.close()
+    bingos = Document()
+    
+    for i in range(cardnum):
+        table = bingos.add_table(rows=6, cols=5)
+        table.style = 'TableGrid'
+        heading_cells = table.rows[0].cells
+        heading_cells[0].text = '\nB\n'
+        heading_cells[1].text = '\nI\n'
+        heading_cells[2].text = '\nN\n'
+        heading_cells[3].text = '\nG\n'
+        heading_cells[4].text = '\nO\n'
 
-	
-	
-
-	wordlist = [line.split(',')[0] for line in open("out.txt")][0:250] # Top 250 words
-
-	bingos = Document()
-	i = 0
-	while i < cardnum:
-		fh = open("out.txt")
-		table = bingos.add_table(rows=6, cols=5)
-		table.style = 'TableGrid'
-		heading_cells = table.rows[0].cells
-		heading_cells[0].text = '\nB\n'
-		heading_cells[1].text = '\nI\n'
-		heading_cells[2].text = '\nN\n'
-		heading_cells[3].text = '\nG\n'
-		heading_cells[4].text = '\nO\n'
-
-		words = random.sample(wordlist,25)  # get a random sample of 25 words from the wordlist 
-		r = 1
-		while r < 6:
-			c = 0
-			while c < 5:
-				table.rows[r].cells[c].text="\n"+ words[r*5+c-5]+"\n" # Populate the chart with the words 
-				c+=1
-			r+=1
-		
-		table.rows[3].cells[2].text="\nFree!\n" # Middle is a Free space!
-		p = bingos.add_paragraph('\n\n\n\n') # line breaks to separate sheets. Word 2016 gives two sheets a page
-		bingos.save('bingo_sheet_output.docx')
-		i+=1
+        words = random.sample(wordlist,25)  # get a random sample of 25 words from the wordlist 
+        for r in range(6):
+            for c in range(5):
+                table.rows[r].cells[c].text="\n"+ words[r*5+c-5]+"\n" # Populate the chart with the words 
+        
+        table.rows[3].cells[2].text="\nFree!\n" # Middle is a Free space!
+        p = bingos.add_paragraph('\n\n\n\n') # line breaks to separate sheets. Word 2016 gives two sheets a page
+        bingos.save('bingo_sheet_output.docx')
+        i+=1
 
 
 
 if __name__ == "__main__":
-	if len(sys.argv) > 2:
-		cardnum = sys.argv[1]
-	else:
-		cardnum = 2
-	main(cardnum)
+    if len(sys.argv) > 2:
+        cardnum = sys.argv[1]
+    else:
+        cardnum = 2
+    main(cardnum)
