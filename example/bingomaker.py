@@ -54,7 +54,7 @@ def main(cardnum):
         data = f.readlines()
 
     searches= []
-    forbidden_words = ["&amp;"] #Put swear words here if you don't want those in lyrics bingo
+    forbidden_words = ["&amp;"]
 
     for lines in data:
         line = lines.split("-")[0].split(";")[0]
@@ -62,8 +62,6 @@ def main(cardnum):
         line = re.sub('\ \(.+?\)', '', line).replace(" ", "+").replace("&","")
         line = re.sub('\[.+?\]', '', line)
         searches.append(line)
-
-
 
     d = {}
     scrape_errors = []
@@ -105,17 +103,19 @@ def main(cardnum):
                         d[word][1]+=1
         except requests.exceptions.MissingSchema:
             print("NOT FOUND:", search)
-            scrape_errors.append("NOT FOUND: "+search+"\n")
+            scrape_errors.append("NOT FOUND: "+search)
 
     #Write words to an empty out.txt for analysis
     with open('out.txt', 'w+') as fh:
+        for err in scrape_errors:
+            fh.write(err+"\n")
+        fh.write("--------\n")
         for w in sorted(d, key=d.get, reverse=True):
             fh.write("{}, {}, {}\n".format(w,str(d[w][0]),str(d[w][1])))
-        for err in scrape_errors:
-            fh.write(err)
+            # would be more efficient to also build wordlist here. Meh.
     
-    
-    wordlist = [line.split(',')[0] for line in open("out.txt")][0:250] # Top 250 words
+    with open('out.txt', 'r') as f:
+        wordlist = [line.split(',')[0] for line in f][len(scrape_errors)+1:251+len(scrape_errors)] # Top 250 words
 
     bingos = Document()
     
@@ -130,7 +130,7 @@ def main(cardnum):
         heading_cells[4].text = '\nO\n'
 
         words = random.sample(wordlist,25)  # get a random sample of 25 words from the wordlist 
-        for r in range(6):
+        for r in range(1,6):
             for c in range(5):
                 table.rows[r].cells[c].text="\n"+ words[r*5+c-5]+"\n" # Populate the chart with the words 
         
